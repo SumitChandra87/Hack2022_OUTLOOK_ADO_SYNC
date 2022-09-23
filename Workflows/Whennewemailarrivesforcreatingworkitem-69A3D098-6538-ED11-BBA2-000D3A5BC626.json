@@ -1,0 +1,214 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_visualstudioteamservices": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "coi_sharedvisualstudioteamservices_1a61d"
+        },
+        "api": {
+          "name": "shared_visualstudioteamservices"
+        }
+      },
+      "shared_office365_1": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "coi_sharedoffice365_0fa39"
+        },
+        "api": {
+          "name": "shared_office365"
+        }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        },
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "When_a_new_email_arrives_(V3)": {
+          "splitOn": "@triggerOutputs()?['body/value']",
+          "metadata": {
+            "operationMetadataId": "4611c15f-9853-4d00-a6ef-cc000a530ee9"
+          },
+          "type": "OpenApiConnectionNotification",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_office365_1",
+              "operationId": "OnNewEmailV3",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+            },
+            "parameters": {
+              "folderPath": "Inbox",
+              "includeAttachments": false,
+              "subjectFilter": "Creating a task in ADO",
+              "importance": "Any",
+              "fetchOnlyWithAttachment": false
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "actions": {
+        "Condition": {
+          "actions": {
+            "Create_a_work_item": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "f6dbd491-dc14-40c1-a016-b4617a32f169"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_visualstudioteamservices",
+                  "operationId": "CreateWorkItem",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_visualstudioteamservices"
+                },
+                "parameters": {
+                  "account": "hackbox3405",
+                  "project": "Hackbox3405",
+                  "type": "Task",
+                  "workItem/title": "@triggerOutputs()?['body/subject']",
+                  "workItem/description": "<p>The task is auto-created from the email:<br>\nFrom: @{body('Parse_JSON')?['from']},<br>\nSubject: @{body('Parse_JSON')?['subject']},<br>\nBody: @{body('Parse_JSON')?['body']}</p>"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Compose": {
+              "runAfter": {
+                "Create_a_work_item": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "4fdb01cf-3276-4026-a6cc-d6d458145134"
+              },
+              "type": "Compose",
+              "inputs": "@outputs('Create_a_work_item')?['body/id']"
+            },
+            "List_work_items": {
+              "runAfter": {
+                "Compose": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "edcb670d-e412-499d-bb81-af8ec46e2e5e"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_visualstudioteamservices",
+                  "operationId": "ListWorkItems",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_visualstudioteamservices"
+                },
+                "parameters": {
+                  "account": "hackbox3405",
+                  "project": "Hackbox3405",
+                  "workItemIds": "@outputs('Compose')",
+                  "workItemType": ""
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Reply_to_email_(V3)": {
+              "runAfter": {
+                "List_work_items": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "083713c9-677c-4ab2-a752-33a6ed85c6a7"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_office365_1",
+                  "operationId": "ReplyToV3",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+                },
+                "parameters": {
+                  "messageId": "@triggerOutputs()?['body/id']",
+                  "replyParameters/Body": "<p>work item id: @{outputs('Compose')}</p>"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            }
+          },
+          "runAfter": {
+            "Parse_JSON": [
+              "Succeeded"
+            ]
+          },
+          "expression": {
+            "equals": [
+              "@body('Parse_JSON')?['type']",
+              "Task"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "abef372e-1206-4b7a-9e74-ebe45bdf6846"
+          },
+          "type": "If"
+        },
+        "Compose_2": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "3aa083d5-388a-4d72-8a05-4bb12702b0e3"
+          },
+          "type": "Compose",
+          "inputs": "@{triggerOutputs()?['body/body']} "
+        },
+        "Parse_JSON": {
+          "runAfter": {
+            "Compose_2": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "080be745-19f2-4591-b9f0-92a4f9bdc1c5"
+          },
+          "type": "ParseJson",
+          "inputs": {
+            "content": "@triggerOutputs()?['body/body']",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "internetMessageID": {
+                  "type": "string"
+                },
+                "olItem": {
+                  "type": "string"
+                },
+                "folder": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "schemaVersion": "1.0.0.0"
+}

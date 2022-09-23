@@ -1,0 +1,542 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_conversionservice": {
+        "runtimeSource": "embedded",
+        "connection": {},
+        "api": {
+          "name": "shared_conversionservice"
+        }
+      },
+      "shared_visualstudioteamservices": {
+        "runtimeSource": "embedded",
+        "connection": {},
+        "api": {
+          "name": "shared_visualstudioteamservices"
+        }
+      },
+      "shared_office365": {
+        "runtimeSource": "embedded",
+        "connection": {},
+        "api": {
+          "name": "shared_office365"
+        }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        },
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        },
+        "HackboxServiceAccount (coi_HackboxServiceAccount)": {
+          "defaultValue": "ankuzn@microsoft.com",
+          "type": "String",
+          "metadata": {
+            "schemaName": "coi_HackboxServiceAccount"
+          }
+        }
+      },
+      "triggers": {
+        "When_a_new_email_arrives_(V3)": {
+          "splitOn": "@triggerOutputs()?['body/value']",
+          "metadata": {
+            "operationMetadataId": "4611c15f-9853-4d00-a6ef-cc000a530ee9"
+          },
+          "type": "OpenApiConnectionNotification",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_office365",
+              "operationId": "OnNewEmailV3",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+            },
+            "parameters": {
+              "folderPath": "Inbox",
+              "includeAttachments": false,
+              "subjectFilter": "Creating a task in ADO",
+              "importance": "Any",
+              "fetchOnlyWithAttachment": false
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "actions": {
+        "Compose_2": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "3aa083d5-388a-4d72-8a05-4bb12702b0e3"
+          },
+          "type": "Compose",
+          "inputs": "@{triggerOutputs()?['body/body']} "
+        },
+        "Html_to_text": {
+          "runAfter": {
+            "Compose_2": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "8670c0fc-766b-4d5a-a6f9-5cec7d40067a"
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_conversionservice",
+              "operationId": "HtmlToText",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_conversionservice"
+            },
+            "parameters": {
+              "Content": "<p>@{triggerOutputs()?['body/body']}</p>"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Html_to_text_2": {
+          "runAfter": {
+            "Html_to_text": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5e10b808-81b1-41c0-b047-6d9ae4ca7fcb"
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_conversionservice",
+              "operationId": "HtmlToText",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_conversionservice"
+            },
+            "parameters": {
+              "Content": "<p>@{outputs('Compose_2')}</p>"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Set_Body": {
+          "runAfter": {
+            "Initialize_Body_": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "43be62b2-9d5b-4b31-bfab-387b461334b0"
+          },
+          "type": "SetVariable",
+          "inputs": {
+            "name": "Body",
+            "value": "@triggerOutputs()?['body/body']"
+          }
+        },
+        "Initialize_Body_": {
+          "runAfter": {
+            "Initialize_FromSourceEmailAddress_variable": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "ead026ce-a9b1-4775-a315-2228c7969971"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "Body",
+                "type": "string",
+                "value": "\"\""
+              }
+            ]
+          }
+        },
+        "Process_Input_String": {
+          "runAfter": {
+            "Set_Body": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "27afb881-5fff-46a4-9c9e-4bf3da8e5cda"
+          },
+          "type": "Compose",
+          "inputs": "@split(variables('Body'),',')"
+        },
+        "Apply_to_each": {
+          "foreach": "@outputs('Process_Input_String')",
+          "actions": {
+            "Current_Item": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "5a6365b3-6ffb-4a9b-b264-41824a23aef2"
+              },
+              "type": "Compose",
+              "inputs": "@items('Apply_to_each')"
+            },
+            "Condition_for_checking_Type": {
+              "actions": {
+                "Set_variable": {
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "5f8f2853-1b64-40ac-9027-3f7d05e83821"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "Type",
+                    "value": "@{trim(replace(last(split(items('Apply_to_each'),':')),'\"',''))}"
+                  }
+                }
+              },
+              "runAfter": {
+                "Current_Item": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "contains": [
+                  "@items('Apply_to_each')",
+                  "\"type\":"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "bf5c8243-b64b-4d71-abe9-0481c239bf02"
+              },
+              "type": "If"
+            },
+            "Condition_for_Original_Email_Subject": {
+              "actions": {
+                "Set_variable_2": {
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "dc480f81-a9f0-465d-b5a9-41767e56b37a"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "SourceEmailSubject",
+                    "value": "@{replace(trim(last(split(items('Apply_to_each'),'\"subject\": \"'))),'\"', '')}"
+                  }
+                }
+              },
+              "runAfter": {
+                "Condition_for_checking_Type": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "contains": [
+                  "@items('Apply_to_each')",
+                  "\"subject\":"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "fa8259d2-06e5-4a8c-8742-d7076d41bb37"
+              },
+              "type": "If"
+            },
+            "Condition_for_Original_From_Email_Address": {
+              "actions": {
+                "Set_From_Source_Email_Address": {
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "41cb9363-91c4-4df3-a09e-1148cb20a784"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "FromSourceEmailAddress",
+                    "value": "@{trim(replace(last(split(items('Apply_to_each'),':')),'\"',''))}"
+                  }
+                }
+              },
+              "runAfter": {
+                "Condition_for_Original_Email_Subject": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "contains": [
+                  "@items('Apply_to_each')",
+                  "\"from\":"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "f8faf1cb-eef6-4fc2-a886-3a3fb20c0cbd"
+              },
+              "type": "If"
+            },
+            "Condition": {
+              "actions": {
+                "Set_variable_3": {
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "1b618f76-e2a5-4c89-8f11-ea14a4f1956c"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "OriginalMessageID",
+                    "value": "@{trim(replace(last(split(items('Apply_to_each'),':')),'\"',''))}"
+                  }
+                }
+              },
+              "runAfter": {
+                "Condition_for_Original_From_Email_Address": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "contains": [
+                  "@items('Apply_to_each')",
+                  "\"internetMessageID\": "
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "fde36e76-af9b-4788-b061-5ac0df840b1c"
+              },
+              "type": "If"
+            }
+          },
+          "runAfter": {
+            "Process_Input_String": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "f9dbbecd-236d-41d0-ae8a-5694dfe6e499"
+          },
+          "type": "Foreach"
+        },
+        "Initialize_Type": {
+          "runAfter": {
+            "Initialize_OriginalMessageID": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "2fec1cf1-0d91-4c99-a48d-8bbd9e454083"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "Type",
+                "type": "string",
+                "value": "\"\""
+              }
+            ]
+          }
+        },
+        "Initialize_variable_for_SourceEmailSubject": {
+          "runAfter": {
+            "Initialize_Type": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "899c7812-4b87-461e-aa5c-9c1aa46fb7ec"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "SourceEmailSubject",
+                "type": "string",
+                "value": "\"\""
+              }
+            ]
+          }
+        },
+        "Initialize_FromSourceEmailAddress_variable": {
+          "runAfter": {
+            "Initialize_variable_for_SourceEmailSubject": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "2ac344d1-61ff-4cd8-92f6-204534879816"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "FromSourceEmailAddress",
+                "type": "string",
+                "value": "\"\""
+              }
+            ]
+          }
+        },
+        "Initialize_OriginalMessageID": {
+          "runAfter": {
+            "Html_to_text_2": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "55a51302-bceb-4744-96a3-b68ed89f946a"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "OriginalMessageID",
+                "type": "string",
+                "value": "\"\""
+              }
+            ]
+          }
+        },
+        "Condition_2": {
+          "actions": {
+            "Create_a_work_item": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "3de68ef1-c1ff-4821-81ab-4c1c89a33cd5"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_visualstudioteamservices",
+                  "operationId": "CreateWorkItem",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_visualstudioteamservices"
+                },
+                "parameters": {
+                  "account": "hackbox3405",
+                  "project": "Hackbox3405",
+                  "type": "Task",
+                  "workItem/title": "@variables('SourceEmailSubject')",
+                  "workItem/description": "<p>This @{variables('Type')} was auto created based on the email from @{variables('FromSourceEmailAddress')}<br>\n<br>\nEmail Message: &nbsp;@{substring(last(split(outputs('Html_to_text')?['body'],'\"body\"')),0,sub(length(last(split(outputs('Html_to_text')?['body'],'\"body\"'))),2))}</p>",
+                  "workItem/userEnteredFields": {
+                    "System.History": "@{substring(last(split(outputs('Html_to_text')?['body'],'\"body\"')),1,sub(length(last(split(outputs('Html_to_text')?['body'],'\"body\"'))),2))}"
+                  }
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Get_emails_(V3)": {
+              "runAfter": {
+                "Compose": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "18aeea3d-8753-45c1-8a9a-52edfe7e2b76"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_office365",
+                  "operationId": "GetEmailsV3",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+                },
+                "parameters": {
+                  "folderPath": "Inbox",
+                  "fetchOnlyUnread": false,
+                  "includeAttachments": false,
+                  "top": 10,
+                  "importance": "Any",
+                  "fetchOnlyWithAttachment": false,
+                  "subjectFilter": "@variables('SourceEmailSubject')"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Apply_to_each_2": {
+              "foreach": "@outputs('Get_emails_(V3)')?['body/value']",
+              "actions": {
+                "Condition_3": {
+                  "actions": {
+                    "Compose_3": {
+                      "runAfter": {},
+                      "metadata": {
+                        "operationMetadataId": "567f96e7-3e3a-49e4-834c-0f6ed86c2ce2"
+                      },
+                      "type": "Compose",
+                      "inputs": "@{items('Apply_to_each_2')?['toRecipients']},@{parameters('HackboxServiceAccount (coi_HackboxServiceAccount)')}"
+                    },
+                    "Reply_to_email_(V3)": {
+                      "runAfter": {
+                        "Compose_3": [
+                          "Succeeded"
+                        ]
+                      },
+                      "metadata": {
+                        "operationMetadataId": "4b9f1385-fca6-47ca-8f4c-8ae14d4abd04"
+                      },
+                      "type": "OpenApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connectionName": "shared_office365",
+                          "operationId": "ReplyToV3",
+                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+                        },
+                        "parameters": {
+                          "messageId": "@items('Apply_to_each_2')?['id']",
+                          "replyParameters/Body": "<p>[Work Item was Created : https://dev.azure.com/hackbox3405/Hackbox3405/_workitems/edit/@{outputs('Create_a_work_item')?['body/id']}]<br>\n<br>\n[Work Item Id : @{outputs('Create_a_work_item')?['body/id']}]<br>\n<br>\n[Work Item Type: @{outputs('Create_a_work_item')?['body/fields/System_WorkItemType']}]<br>\n</p>",
+                          "replyParameters/ReplyAll": true,
+                          "replyParameters/Cc": "@{items('Apply_to_each_2')?['toRecipients']};@{parameters('HackboxServiceAccount (coi_HackboxServiceAccount)')}"
+                        },
+                        "authentication": "@parameters('$authentication')"
+                      }
+                    }
+                  },
+                  "runAfter": {},
+                  "expression": {
+                    "equals": [
+                      "@items('Apply_to_each_2')?['subject']",
+                      "@variables('SourceEmailSubject')"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "df2a5b4f-4753-41c2-a5ed-9bde3e5ee331"
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Get_emails_(V3)": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "d3f81c5b-4244-4e4f-8409-4462fbb7b36e"
+              },
+              "type": "Foreach"
+            },
+            "Compose": {
+              "runAfter": {
+                "Create_a_work_item": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "87e3d2db-2d1b-4a7c-b808-611b726db6ba"
+              },
+              "type": "Compose",
+              "inputs": "@split(outputs('Html_to_text')?['body'],'\"body\"')"
+            }
+          },
+          "runAfter": {
+            "Apply_to_each": [
+              "Succeeded"
+            ]
+          },
+          "expression": {
+            "equals": [
+              "@triggerOutputs()?['body/subject']",
+              "Creating a task in ADO"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "296dab39-a725-4c7b-afa4-27a25ae3dd5c"
+          },
+          "type": "If"
+        }
+      }
+    }
+  },
+  "schemaVersion": "1.0.0.0"
+}

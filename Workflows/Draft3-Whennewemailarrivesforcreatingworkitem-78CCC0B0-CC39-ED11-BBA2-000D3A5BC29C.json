@@ -1,0 +1,158 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_visualstudioteamservices": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "coi_sharedvisualstudioteamservices_1a61d"
+        },
+        "api": {
+          "name": "shared_visualstudioteamservices"
+        }
+      },
+      "shared_conversionservice": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "coi_sharedconversionservice_1e382"
+        },
+        "api": {
+          "name": "shared_conversionservice"
+        }
+      },
+      "shared_office365": {
+        "runtimeSource": "embedded",
+        "connection": {
+          "connectionReferenceLogicalName": "coi_sharedoffice365_246e9"
+        },
+        "api": {
+          "name": "shared_office365"
+        }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        },
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "When_a_new_email_arrives_(V3)": {
+          "splitOn": "@triggerOutputs()?['body/value']",
+          "metadata": {
+            "operationMetadataId": "0e3a3242-4ee1-4fbe-83c9-e570119cc21d"
+          },
+          "type": "OpenApiConnectionNotification",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_office365",
+              "operationId": "OnNewEmailV3",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+            },
+            "parameters": {
+              "folderPath": "Inbox",
+              "includeAttachments": false,
+              "subjectFilter": "Creating a work item in ADO",
+              "importance": "Any",
+              "fetchOnlyWithAttachment": false
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "actions": {
+        "Parse_JSON": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "867b014c-d6ec-4cef-9d22-bcb92eafee91"
+          },
+          "type": "ParseJson",
+          "inputs": {
+            "content": "@triggerOutputs()?['body/body']",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "internetMessageID": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "Create_a_work_item": {
+          "runAfter": {
+            "Html_to_text": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "f07c103d-12c5-426f-81ff-f0664898ebef"
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_visualstudioteamservices",
+              "operationId": "CreateWorkItem",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_visualstudioteamservices"
+            },
+            "parameters": {
+              "account": "hackbox3405",
+              "project": "Hackbox3405",
+              "type": "@body('Parse_JSON')?['type']",
+              "workItem/title": "@body('Parse_JSON')?['subject']",
+              "workItem/description": "<p>The @{body('Parse_JSON')?['type']} is auto-created from the email:<br>\nbody:&nbsp;@{triggerOutputs()?['body/body']}</p>"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Html_to_text": {
+          "runAfter": {
+            "Parse_JSON": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "b9039f85-f7ca-4f9d-bfa6-e615c3bd969f"
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_conversionservice",
+              "operationId": "HtmlToText",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_conversionservice"
+            },
+            "parameters": {
+              "Content": "<p>@{triggerOutputs()?['body']}</p>"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Compose": {
+          "runAfter": {
+            "Create_a_work_item": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "04f7645c-670e-4588-a13b-48e74a143748"
+          },
+          "type": "Compose",
+          "inputs": "@outputs('Create_a_work_item')?['body/id']"
+        }
+      }
+    }
+  },
+  "schemaVersion": "1.0.0.0"
+}
